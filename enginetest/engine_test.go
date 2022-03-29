@@ -257,8 +257,8 @@ func TestTrackProcess(t *testing.T) {
 	ctx, err := ctx.ProcessList.AddProcess(ctx, "SELECT foo")
 	require.NoError(err)
 
-	rule := getRuleFrom(analyzer.OnceAfterAll, "track_process")
-	result, err := rule.Apply(ctx, a, node, nil)
+	rule := getRuleFrom(analyzer.OnceAfterAll, analyzer.TrackProcessId)
+	result, err := rule.Apply(ctx, a, node, nil, analyzer.DefaultRuleSelector)
 	require.NoError(err)
 
 	processes := ctx.ProcessList.Processes()
@@ -305,9 +305,9 @@ func TestTrackProcess(t *testing.T) {
 	}
 }
 
-func getRuleFrom(rules []analyzer.Rule, name string) *analyzer.Rule {
+func getRuleFrom(rules []analyzer.Rule, id analyzer.RuleId) *analyzer.Rule {
 	for _, rule := range rules {
-		if rule.Name == name {
+		if rule.Id == id {
 			return &rule
 		}
 	}

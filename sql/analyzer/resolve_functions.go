@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveTableFunctions(ctx *sql.Context, a *Analyzer, n sql.Node, _ *Scope) (sql.Node, error) {
+func resolveTableFunctions(ctx *sql.Context, a *Analyzer, n sql.Node, _ *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("resolve_table_functions")
 	defer span.Finish()
 
@@ -59,7 +59,7 @@ func resolveTableFunctions(ctx *sql.Context, a *Analyzer, n sql.Node, _ *Scope) 
 }
 
 // resolveFunctions replaces UnresolvedFunction nodes with equivalent functions from the Catalog.
-func resolveFunctions(ctx *sql.Context, a *Analyzer, n sql.Node, _ *Scope) (sql.Node, error) {
+func resolveFunctions(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("resolve_functions")
 	defer span.Finish()
 

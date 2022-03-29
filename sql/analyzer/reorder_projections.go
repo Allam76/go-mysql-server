@@ -31,7 +31,7 @@ import (
 // Project([a, foo], Sort(foo, Project([a, 1 as foo], table)))
 // This process also converts higher-level projected fields to GetField expressions, since we don't want to evaluate
 // the original expression more than once (which could actually produce incorrect results in some cases).
-func reorderProjection(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func reorderProjection(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("reorder_projection")
 	defer span.Finish()
 
@@ -75,12 +75,12 @@ func reorderProjection(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) 
 
 		// To do the reordering, we need to reason about column types, which means the child needs to be resolved.
 		// If it can't be resolved, we can't continue.
-		child, err = resolveColumns(ctx, a, child, scope)
+		child, err = resolveColumns(ctx, a, child, scope, sel)
 		if err != nil {
 			return nil, err
 		}
 
-		child, err = resolveSubqueryExpressions(ctx, a, child, scope)
+		child, err = resolveSubqueryExpressions(ctx, a, child, scope, sel)
 		if err != nil {
 			return nil, err
 		}

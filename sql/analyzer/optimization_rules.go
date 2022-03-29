@@ -22,7 +22,7 @@ import (
 
 // eraseProjection removes redundant Project nodes from the plan. A project is redundant if it doesn't alter the schema
 // of its child.
-func eraseProjection(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func eraseProjection(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("erase_projection")
 	defer span.Finish()
 
@@ -44,7 +44,7 @@ func eraseProjection(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope)
 // optimizeDistinct substitutes a Distinct node for an OrderedDistinct node when the child of Distinct is already
 // ordered. The OrderedDistinct node is much faster and uses much less memory, since it only has to compare the
 // previous row to the current one to determine its distinct-ness.
-func optimizeDistinct(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func optimizeDistinct(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("optimize_distinct")
 	defer span.Finish()
 
@@ -74,7 +74,7 @@ func optimizeDistinct(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope
 // moveJoinConditionsToFilter looks for expressions in a join condition that reference only tables in the left or right
 // side of the join, and move those conditions to a new Filter node instead. If the join condition is empty after these
 // moves, the join is converted to a CrossJoin.
-func moveJoinConditionsToFilter(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func moveJoinConditionsToFilter(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if !n.Resolved() {
 		return n, nil
 	}
@@ -160,7 +160,7 @@ func moveJoinConditionsToFilter(ctx *sql.Context, a *Analyzer, n sql.Node, scope
 }
 
 // removeUnnecessaryConverts removes any Convert expressions that don't alter the type of the expression.
-func removeUnnecessaryConverts(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func removeUnnecessaryConverts(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("remove_unnecessary_converts")
 	defer span.Finish()
 
@@ -231,10 +231,10 @@ func expressionSources(expr sql.Expression) []string {
 	return result
 }
 
-// evalFilter simplifies the expressions in Filter nodes where possible. This involves removing redundant parts of AND
+// simplifyFilters simplifies the expressions in Filter nodes where possible. This involves removing redundant parts of AND
 // and OR expressions, as well as replacing evaluable expressions with their literal result. Filters that can
 // statically be determined to be true or false are replaced with the child node or an empty result, respectively.
-func evalFilter(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func simplifyFilters(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if !node.Resolved() {
 		return node, nil
 	}

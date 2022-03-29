@@ -27,7 +27,7 @@ import (
 // It functions similarly to pushdownFilters, in that it applies an index to a table. But unlike that function, it must
 // apply, effectively, an indexed join between two tables, one of which is defined in the outer scope. This is similar
 // to the process in the join analyzer.
-func applyIndexesFromOuterScope(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyIndexesFromOuterScope(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if scope == nil {
 		return n, nil
 	}

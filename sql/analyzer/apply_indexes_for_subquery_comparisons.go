@@ -29,7 +29,7 @@ import (
 // 3. The left hand side is a GetField expression against the Child.
 // 4. The Child is a *plan.ResolvedTable.
 // 5. The referenced field in the Child is indexed.
-func applyIndexesForSubqueryComparisons(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyIndexesForSubqueryComparisons(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	aliases, err := getTableAliases(n, scope)
 	if err != nil {
 		return nil, err

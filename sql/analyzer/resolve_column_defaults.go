@@ -438,7 +438,7 @@ type targetSchema interface {
 	TargetSchema() sql.Schema
 }
 
-func resolveColumnDefaults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveColumnDefaults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("resolveColumnDefaults")
 	defer span.Finish()
 
@@ -583,7 +583,7 @@ func resolveColumnDefaults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Sco
 // parseColumnDefaults transforms UnresolvedColumnDefault expressions into ColumnDefaultValue expressions, which
 // amounts to parsing the string representation into an actual expression. We only require an actual column default
 // value for some node types, where the value will be used.
-func parseColumnDefaults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func parseColumnDefaults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("parse_column_defaults")
 	defer span.Finish()
 

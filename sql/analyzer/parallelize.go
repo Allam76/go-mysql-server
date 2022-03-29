@@ -57,7 +57,7 @@ func shouldParallelize(node sql.Node, scope *Scope) bool {
 	return !plan.IsNoRowNode(node)
 }
 
-func parallelize(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func parallelize(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if a.Parallelism <= 1 || !node.Resolved() {
 		return node, nil
 	}

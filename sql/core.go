@@ -372,7 +372,8 @@ type FilteredTable interface {
 // that's more optimized given the columns that are projected.
 type ProjectedTable interface {
 	Table
-	WithProjection(colNames []string) Table
+	WithProjections(colNames []string) Table
+	Projections() []string
 }
 
 // StatisticsTable is a table that can provide information about its number of rows and other facts to improve query
@@ -597,11 +598,11 @@ type RowReplacer interface {
 	// each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 	// Close is called.
 	Delete(*Context, Row) error
-	// Close finalizes the replace operation, persisting the result.
+	// Closer finalizes the replace operation, persisting the result.
 	Closer
 }
 
-// Replacer allows rows to be replaced through a Delete (if applicable) then Insert.
+// ReplaceableTable allows rows to be replaced through a Delete (if applicable) then Insert.
 type ReplaceableTable interface {
 	Table
 	// Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
@@ -609,7 +610,7 @@ type ReplaceableTable interface {
 	Replacer(ctx *Context) RowReplacer
 }
 
-// UpdateableTable is a table that can process updates of existing rows via update statements.
+// UpdatableTable is a table that can process updates of existing rows via update statements.
 type UpdatableTable interface {
 	Table
 	// Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
@@ -622,7 +623,7 @@ type RowUpdater interface {
 	TableEditor
 	// Update the given row. Provides both the old and new rows.
 	Update(ctx *Context, old Row, new Row) error
-	// Close finalizes the update operation, persisting the result.
+	// Closer finalizes the update operation, persisting the result.
 	Closer
 }
 
@@ -695,6 +696,18 @@ type VersionedDatabase interface {
 	// GetTableNamesAsOf returns the table names of every table in the database as of the revision given. Implementors
 	// must choose which types of expressions to accept as revision names.
 	GetTableNamesAsOf(ctx *Context, asOf interface{}) ([]string, error)
+}
+
+// UnresolvedTable is a Table that is either unresolved or deferred for until an asOf resolution
+type UnresolvedTable interface {
+	Nameable
+	// Database returns the database name
+	Database() string
+	// WithAsOf returns a copy of this versioned table with its AsOf
+	// field set to the given value. Analogous to WithChildren.
+	WithAsOf(asOf Expression) (Node, error)
+	//AsOf returns this table's asof expression.
+	AsOf() Expression
 }
 
 type TransactionCharacteristic int
@@ -850,7 +863,7 @@ func DBTableIter(ctx *Context, db Database, cb func(Table) (cont bool, err error
 
 // TableCreator should be implemented by databases that can create new tables.
 type TableCreator interface {
-	// Creates the table with the given name and schema. If a table with that name already exists, must return
+	// CreateTable creates the table with the given name and schema. If a table with that name already exists, must return
 	// sql.ErrTableAlreadyExists.
 	CreateTable(ctx *Context, name string, schema PrimaryKeySchema) error
 }
@@ -859,7 +872,7 @@ type TableCreator interface {
 // Note that temporary tables with the same name as persisted tables take precedence in most SQL operations.
 type TemporaryTableCreator interface {
 	Database
-	// Creates the table with the given name and schema. If a temporary table with that name already exists, must
+	// CreateTemporaryTable creates the table with the given name and schema. If a temporary table with that name already exists, must
 	// return sql.ErrTableAlreadyExists
 	CreateTemporaryTable(ctx *Context, name string, schema PrimaryKeySchema) error
 }
@@ -894,7 +907,7 @@ type TableDropper interface {
 
 // TableRenamer should be implemented by databases that can rename tables.
 type TableRenamer interface {
-	// Renames a table from oldName to newName as given. If a table with newName already exists, must return
+	// RenameTable renames a table from oldName to newName as given. If a table with newName already exists, must return
 	// sql.ErrTableAlreadyExists.
 	RenameTable(ctx *Context, oldName, newName string) error
 }

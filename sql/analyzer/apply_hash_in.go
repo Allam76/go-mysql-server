@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func applyHashIn(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyHashIn(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	return plan.TransformUpCtx(n, nil, func(c plan.TransformContext) (sql.Node, error) {
 		filter, ok := c.Node.(*plan.Filter)
 		if !ok {

@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveInsertRows(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveInsertRows(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if _, ok := n.(*plan.TriggerExecutor); ok {
 		return n, nil
 	} else if _, ok := n.(*plan.CreateProcedure); ok {

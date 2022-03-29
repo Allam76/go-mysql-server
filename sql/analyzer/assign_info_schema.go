@@ -19,9 +19,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-// Grab-bag analyzer function to assign information schema info to any plan nodes that need it, like various SHOW *
-// statements. The logic for each node is necessarily pretty custom.
-func assignInfoSchema(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+// loadInfoSchema is a grab-bag analyzer function to assign information schema info to any plan
+// nodes that need it, like various SHOW * statements. The logic for each node is necessarily pretty custom.
+func loadInfoSchema(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	return plan.TransformUp(n, func(n sql.Node) (sql.Node, error) {
 		switch x := n.(type) {
 		case *plan.ShowIndexes:

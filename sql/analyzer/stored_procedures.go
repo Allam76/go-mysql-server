@@ -27,7 +27,7 @@ import (
 )
 
 // loadStoredProcedures loads stored procedures for all databases on relevant calls.
-func loadStoredProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func loadStoredProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if a.ProcedureCache.IsPopulating {
 		return n, nil
 	}
@@ -75,7 +75,7 @@ func loadStoredProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scop
 				if err != nil {
 					return nil, err
 				}
-				analyzedNode, err := resolveDeclarations(ctx, a, cp.Procedure, scope)
+				analyzedNode, err := resolveDeclarations(ctx, a, cp.Procedure, scope, sel)
 				if err != nil {
 					return nil, err
 				}
@@ -130,7 +130,7 @@ func analyzeProcedureBodies(ctx *sql.Context, a *Analyzer, node sql.Node, skipCa
 
 // validateCreateProcedure handles CreateProcedure nodes, resolving references to the parameters, along with ensuring
 // that all logic contained within the stored procedure body is valid.
-func validateCreateProcedure(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func validateCreateProcedure(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	cp, ok := node.(*plan.CreateProcedure)
 	if !ok {
 		return node, nil
@@ -294,7 +294,7 @@ func resolveProcedureParamsTransform(ctx *sql.Context, paramNames map[string]str
 }
 
 // applyProcedures applies the relevant stored procedures to the node given (if necessary).
-func applyProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if a.ProcedureCache.IsPopulating {
 		return n, nil
 	}
@@ -304,7 +304,7 @@ func applyProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (s
 	return plan.TransformUp(n, func(n sql.Node) (sql.Node, error) {
 		switch n := n.(type) {
 		case *plan.Call:
-			return applyProceduresCall(ctx, a, n, scope)
+			return applyProceduresCall(ctx, a, n, scope, sel)
 		default:
 			return n, nil
 		}
@@ -312,7 +312,7 @@ func applyProcedures(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (s
 }
 
 // applyProceduresCall applies the relevant stored procedure to the given *plan.Call.
-func applyProceduresCall(ctx *sql.Context, a *Analyzer, call *plan.Call, scope *Scope) (sql.Node, error) {
+func applyProceduresCall(ctx *sql.Context, a *Analyzer, call *plan.Call, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	pRef := expression.NewProcedureParamReference()
 	call = call.WithParamReference(pRef)
 
@@ -376,7 +376,7 @@ func applyProceduresCall(ctx *sql.Context, a *Analyzer, call *plan.Call, scope *
 		}
 		return plan.NewProcedureResolvedTable(rt), nil
 	})
-	transformedProcedure, err = applyProcedures(ctx, a, transformedProcedure, scope)
+	transformedProcedure, err = applyProcedures(ctx, a, transformedProcedure, scope, sel)
 	if err != nil {
 		return nil, err
 	}

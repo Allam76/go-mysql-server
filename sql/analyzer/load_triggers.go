@@ -24,7 +24,7 @@ import (
 
 // loadTriggers loads any triggers that are required for a plan node to operate properly (except for nodes dealing with
 // trigger execution).
-func loadTriggers(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func loadTriggers(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("loadTriggers")
 	defer span.Finish()
 

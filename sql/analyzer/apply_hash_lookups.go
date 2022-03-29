@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func applyHashLookups(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyHashLookups(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	return plan.TransformUpCtx(n, nil, func(c plan.TransformContext) (sql.Node, error) {
 		if c.SchemaPrefix == nil {
 			// If c.SchemaPrefix is nil, it's possible our prefix

@@ -22,15 +22,21 @@ import (
 )
 
 // RuleFunc is the function to be applied in a rule.
-type RuleFunc func(*sql.Context, *Analyzer, sql.Node, *Scope) (sql.Node, error)
+type RuleFunc func(*sql.Context, *Analyzer, sql.Node, *Scope, RuleSelector) (sql.Node, error)
+
+// RuleSelector filters analysis rules by id
+type RuleSelector func(RuleId) bool
 
 // Rule to transform nodes.
 type Rule struct {
 	// Name of the rule.
-	Name string
+	Id RuleId
 	// Apply transforms a node.
 	Apply RuleFunc
 }
+
+// BatchSelector filters analysis batches by name
+type BatchSelector func(string) bool
 
 // Batch executes a set of rules a specific number of times.
 // When this number of times is reached, the actual node
@@ -45,13 +51,17 @@ type Batch struct {
 // If the batch's max number of iterations is reached without achieving stabilization (batch evaluation no longer
 // changes the node), then this method returns ErrMaxAnalysisIters.
 func (b *Batch) Eval(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+	return b.EvalWithSelector(ctx, a, n, scope, DefaultRuleSelector)
+}
+
+func (b *Batch) EvalWithSelector(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	if b.Iterations == 0 {
 		return n, nil
 	}
 
 	prev := n
 	a.PushDebugContext("0")
-	cur, err := b.evalOnce(ctx, a, n, scope)
+	cur, err := b.evalOnce(ctx, a, n, scope, sel)
 	a.PopDebugContext()
 	if err != nil {
 		return cur, err
@@ -70,7 +80,7 @@ func (b *Batch) Eval(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (s
 
 		prev = cur
 		a.PushDebugContext(strconv.Itoa(i))
-		cur, err = b.evalOnce(ctx, a, cur, scope)
+		cur, err = b.evalOnce(ctx, a, cur, scope, sel)
 		a.PopDebugContext()
 		if err != nil {
 			return cur, err
@@ -85,13 +95,17 @@ func (b *Batch) Eval(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (s
 // evalOnce returns the result of evaluating a batch of rules on the node given. In the result of an error, the result
 // of the last successful transformation is returned along with the error. If no transformation was successful, the
 // input node is returned as-is.
-func (b *Batch) evalOnce(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func (b *Batch) evalOnce(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	prev := n
 	for _, rule := range b.Rules {
+		if !sel(rule.Id) {
+			a.Log("Skipping rule %s", rule.Id)
+			continue
+		}
 		var err error
-		a.Log("Evaluating rule %s", rule.Name)
-		a.PushDebugContext(rule.Name)
-		next, err := rule.Apply(ctx, a, prev, scope)
+		a.Log("Evaluating rule %s", rule.Id)
+		a.PushDebugContext(rule.Id.String())
+		next, err := rule.Apply(ctx, a, prev, scope, sel)
 		if next != nil {
 			a.LogDiff(prev, next)
 			prev = next

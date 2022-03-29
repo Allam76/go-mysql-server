@@ -74,6 +74,49 @@ func TestSpatialQueries(t *testing.T, harness Harness) {
 	}
 }
 
+// TestInfoSchemaPrepared runs tests of the information_schema database
+func TestInfoSchemaPrepared(t *testing.T, harness Harness) {
+	dbs := CreateSubsetTestData(t, harness, infoSchemaTables)
+	engine := NewEngineWithDbs(t, harness, dbs)
+	defer engine.Close()
+	CreateIndexes(t, harness, engine)
+	createForeignKeys(t, harness, engine)
+
+	for _, tt := range InfoSchemaQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+	for _, script := range InfoSchemaScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+}
+
+func TestQueriesPrepared(t *testing.T, harness Harness) {
+	engine := NewEngine(t, harness)
+	defer engine.Close()
+
+	CreateIndexes(t, harness, engine)
+	createForeignKeys(t, harness, engine)
+
+	for _, tt := range QueryTests {
+		if tt.SkipPrepared {
+			continue
+		}
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+	for _, tt := range SpatialQueryTests {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+	for _, tt := range KeylessQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+	for _, tt := range DateParseQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+	for _, tt := range DateParseQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+	}
+}
+
 // Runs the query tests given after setting up the engine. Useful for testing out a smaller subset of queries during
 // debugging.
 func RunQueryTests(t *testing.T, harness Harness, queries []QueryTest) {
@@ -260,6 +303,25 @@ func TestVersionedQueries(t *testing.T, harness Harness) {
 	}
 }
 
+// Tests a variety of queries against databases and tables provided by the given harness.
+func TestVersionedQueriesPrepared(t *testing.T, harness Harness) {
+	t.Skip("prepared queries do not fully support versioning")
+	if _, ok := harness.(VersionedDBHarness); !ok {
+		t.Skipf("Skipping versioned test, harness doesn't implement VersionedDBHarness")
+	}
+
+	engine := NewEngine(t, harness)
+	defer engine.Close()
+
+	for _, tt := range VersionedQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, nil, tt.Bindings)
+	}
+
+	for _, tt := range VersionedScripts {
+		TestScriptWithEnginePrepared(t, engine, harness, tt)
+	}
+}
+
 // TestQueryPlan analyzes the query given and asserts that its printed plan matches the expected one.
 func TestQueryPlan(t *testing.T, ctx *sql.Context, engine *sqle.Engine, harness Harness, query string, expectedPlan string) {
 	parsed, err := parse.Parse(ctx, query)
@@ -313,10 +375,7 @@ func TestOrderByGroupBy(t *testing.T, harness Harness) {
 
 	e := sqle.NewDefault(harness.NewDatabaseProvider(db))
 
-	sch, iter, err := e.Query(
-		NewContext(harness).WithCurrentDB("db"),
-		"SELECT team, COUNT(*) FROM members GROUP BY team ORDER BY 2",
-	)
+	sch, iter, err := e.Query(NewContext(harness).WithCurrentDB("db"), "SELECT team, COUNT(*) FROM members GROUP BY team ORDER BY 2")
 	require.NoError(err)
 
 	ctx := NewContext(harness)
@@ -331,10 +390,7 @@ func TestOrderByGroupBy(t *testing.T, harness Harness) {
 
 	require.Equal(expected, rows)
 
-	sch, iter, err = e.Query(
-		NewContext(harness).WithCurrentDB("db"),
-		"SELECT team, COUNT(*) FROM members GROUP BY 1 ORDER BY 2",
-	)
+	sch, iter, err = e.Query(NewContext(harness).WithCurrentDB("db"), "SELECT team, COUNT(*) FROM members GROUP BY 1 ORDER BY 2")
 	require.NoError(err)
 
 	rows, err = sql.RowIterToRows(ctx, sch, iter)
@@ -342,10 +398,7 @@ func TestOrderByGroupBy(t *testing.T, harness Harness) {
 
 	require.Equal(expected, rows)
 
-	_, _, err = e.Query(
-		NewContext(harness),
-		"SELECT team, COUNT(*) FROM members GROUP BY team ORDER BY columndoesnotexist",
-	)
+	_, _, err = e.Query(NewContext(harness), "SELECT team, COUNT(*) FROM members GROUP BY team ORDER BY columndoesnotexist")
 	require.Error(err)
 }
 
@@ -398,6 +451,25 @@ func TestExplode(t *testing.T, harness Harness) {
 
 	for _, q := range ExplodeQueries {
 		TestQuery(t, harness, e, q.Query, q.Expected, nil, q.Bindings)
+	}
+}
+
+func TestExplodePrepared(t *testing.T, harness Harness) {
+	db := harness.NewDatabase("mydb")
+	table, err := harness.NewTable(db, "t", sql.NewPrimaryKeySchema(sql.Schema{
+		{Name: "a", Type: sql.Int64, Source: "t"},
+		{Name: "b", Type: sql.CreateArray(sql.Text), Source: "t"},
+		{Name: "c", Type: sql.Text, Source: "t"},
+	}))
+	require.NoError(t, err)
+
+	InsertRows(t, harness.NewContext(), mustInsertableTable(t, table), sql.NewRow(int64(1), []interface{}{"a", "b"}, "first"), sql.NewRow(int64(2), []interface{}{"c", "d"}, "second"), sql.NewRow(int64(3), []interface{}{"e", "f"}, "third"))
+
+	e := sqle.New(analyzer.NewDefault(harness.NewDatabaseProvider(db)), new(sqle.Config))
+	defer e.Close()
+
+	for _, q := range ExplodeQueries {
+		TestPreparedQuery(t, harness, e, q.Query, q.Expected, nil, q.Bindings)
 	}
 }
 
@@ -740,6 +812,49 @@ func TestDelete(t *testing.T, harness Harness) {
 		}
 		TestQuery(t, harness, e, delete.SelectQuery, delete.ExpectedSelect, nil, delete.Bindings)
 	}
+
+}
+
+func runWriteQueryTest(t *testing.T, harness Harness, tt WriteQueryTest) {
+	t.Run(tt.WriteQuery, func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
+
+		ctx := NewContextWithEngine(harness, e)
+		TestPreparedQueryWithContext(t, ctx, e, tt.WriteQuery, tt.ExpectedWriteResult, nil)
+		// If we skipped the delete, also skip the select
+		if sh, ok := harness.(SkippingHarness); ok {
+			if sh.SkipQueryTest(tt.WriteQuery) {
+				t.Logf("Skipping query %s", tt.SelectQuery)
+				return
+			}
+		}
+		TestPreparedQueryWithContext(t, ctx, e, tt.SelectQuery, tt.ExpectedSelect, nil)
+	})
+}
+
+func TestWriteQueriesPrepared(t *testing.T, harness Harness) {
+	for _, tt := range DeleteTests {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range SpatialDeleteTests {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range SpatialInsertQueries {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range ReplaceQueries {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range InsertQueries {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range UpdateTests {
+		runWriteQueryTest(t, harness, tt)
+	}
+	for _, tt := range SpatialUpdateTests {
+		runWriteQueryTest(t, harness, tt)
+	}
 }
 
 func TestDeleteErrors(t *testing.T, harness Harness) {
@@ -1053,6 +1168,33 @@ func TestScripts(t *testing.T, harness Harness) {
 	}
 }
 
+func TestPreparedScripts(t *testing.T, harness Harness) {
+	for _, script := range ScriptTests {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range InsertScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range ComplexIndexQueries {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range LoadDataScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range JsonScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range CreateCheckConstraintsScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range InsertIgnoreScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+	for _, script := range InsertErrorScripts {
+		TestScriptPrepared(t, harness, script)
+	}
+}
+
 func TestScriptQueryPlan(t *testing.T, harness Harness) {
 	// TEST SCRIPTS
 	for _, script := range ScriptQueryPlanTest {
@@ -1208,7 +1350,7 @@ func TestUserPrivileges(t *testing.T, h Harness) {
 					t.Skipf("Skipping query %s", lastQuery)
 				}
 			}
-			ctx := harness.NewContextWithClient(sql.Client{
+			ctx := rootCtx.NewCtxWithClient(sql.Client{
 				User:    "tester",
 				Address: "localhost",
 			})
@@ -1701,6 +1843,71 @@ func TestScriptWithEngine(t *testing.T, e *sqle.Engine, harness Harness, script 
 	}
 }
 
+// TestScriptPrepared substitutes literals for bindvars, runs the test script given,
+// and makes any assertions given
+func TestScriptPrepared(t *testing.T, harness Harness, script ScriptTest) bool {
+	return t.Run(script.Name, func(t *testing.T) {
+		if script.SkipPrepared {
+			t.Skip()
+		}
+		myDb := harness.NewDatabase("mydb")
+		databases := []sql.Database{myDb}
+		e := NewEngineWithDbs(t, harness, databases)
+		defer e.Close()
+		TestScriptWithEnginePrepared(t, e, harness, script)
+	})
+}
+
+// TestScriptWithEnginePrepared runs the test script with bindvars substituted for literals
+// using the engine provided.
+func TestScriptWithEnginePrepared(t *testing.T, e *sqle.Engine, harness Harness, script ScriptTest) {
+	ctx := NewContextWithEngine(harness, e)
+	for _, statement := range script.SetUpScript {
+		if sh, ok := harness.(SkippingHarness); ok {
+			if sh.SkipQueryTest(statement) {
+				t.Skip()
+			}
+		}
+		runQueryPreparedWithCtx(t, ctx, e, statement)
+	}
+
+	assertions := script.Assertions
+	if len(assertions) == 0 {
+		assertions = []ScriptTestAssertion{
+			{
+				Query:       script.Query,
+				Expected:    script.Expected,
+				ExpectedErr: script.ExpectedErr,
+			},
+		}
+	}
+
+	for _, assertion := range assertions {
+		if sh, ok := harness.(SkippingHarness); ok {
+			if sh.SkipQueryTest(assertion.Query) {
+				t.Skip()
+			}
+		}
+		if assertion.ExpectedErr != nil {
+			t.Run(assertion.Query, func(t *testing.T) {
+				AssertErr(t, e, harness, assertion.Query, assertion.ExpectedErr)
+			})
+		} else if assertion.ExpectedErrStr != "" {
+			t.Run(assertion.Query, func(t *testing.T) {
+				AssertErr(t, e, harness, assertion.Query, nil, assertion.ExpectedErrStr)
+			})
+		} else if assertion.ExpectedWarning != 0 {
+			t.Run(assertion.Query, func(t *testing.T) {
+				AssertWarningAndTestQuery(t, e, nil, harness, assertion.Query,
+					assertion.Expected, nil, assertion.ExpectedWarning, assertion.ExpectedWarningsCount,
+					assertion.ExpectedWarningMessageSubstring, assertion.SkipResultsCheck)
+			})
+		} else {
+			TestPreparedQueryWithContext(t, ctx, e, assertion.Query, assertion.Expected, nil)
+		}
+	}
+}
+
 func TestTransactionScripts(t *testing.T, harness Harness) {
 	for _, script := range TransactionTests {
 		TestTransactionScript(t, harness, script)
@@ -1783,19 +1990,24 @@ func TestViews(t *testing.T, harness Harness) {
 	// Views with non-standard select statements
 	RunQueryWithContext(t, e, ctx, "create view unionView as (select * from myTable order by i limit 1) union all (select * from mytable order by i limit 1)")
 	t.Run("select * from unionview order by i", func(t *testing.T) {
-		TestQueryWithContext(
-			t,
-			ctx,
-			e,
-			"select * from unionview order by i",
-			[]sql.Row{
-				{1, "first row"},
-				{1, "first row"},
-			},
-			nil,
-			nil,
-		)
+		TestQueryWithContext(t, ctx, e, "select * from unionview order by i", []sql.Row{
+			{1, "first row"},
+			{1, "first row"},
+		}, nil, nil)
 	})
+}
+
+func TestViewsPrepared(t *testing.T, harness Harness) {
+	e := NewEngine(t, harness)
+	defer e.Close()
+	ctx := NewContext(harness)
+
+	RunQueryWithContext(t, e, ctx, "CREATE VIEW myview2 AS SELECT * FROM myview WHERE i = 1")
+	for _, testCase := range ViewTests {
+		t.Run(testCase.Query, func(t *testing.T) {
+			TestPreparedQueryWithContext(t, ctx, e, testCase.Query, testCase.Expected, nil)
+		})
+	}
 }
 
 func TestVersionedViews(t *testing.T, harness Harness) {
@@ -1820,6 +2032,32 @@ func TestVersionedViews(t *testing.T, harness Harness) {
 	for _, testCase := range VersionedViewTests {
 		t.Run(testCase.Query, func(t *testing.T) {
 			TestQueryWithContext(t, ctx, e, testCase.Query, testCase.Expected, nil, testCase.Bindings)
+		})
+	}
+}
+
+func TestVersionedViewsPrepared(t *testing.T, harness Harness) {
+	if _, ok := harness.(VersionedDBHarness); !ok {
+		t.Skipf("Skipping versioned test, harness doesn't implement VersionedDBHarness")
+	}
+
+	require := require.New(t)
+
+	e := NewEngine(t, harness)
+	defer e.Close()
+	ctx := NewContext(harness)
+	_, iter, err := e.Query(ctx, "CREATE VIEW myview1 AS SELECT * FROM myhistorytable")
+	require.NoError(err)
+	iter.Close(ctx)
+
+	// nested views
+	_, iter, err = e.Query(ctx, "CREATE VIEW myview2 AS SELECT * FROM myview1 WHERE i = 1")
+	require.NoError(err)
+	iter.Close(ctx)
+
+	for _, testCase := range VersionedViewTests {
+		t.Run(testCase.Query, func(t *testing.T) {
+			TestPreparedQueryWithContext(t, ctx, e, testCase.Query, testCase.Expected, nil)
 		})
 	}
 }
@@ -4755,6 +4993,20 @@ func TestShowTableStatus(t *testing.T, harness Harness) {
 	}
 }
 
+// Runs tests on SHOW TABLE STATUS queries.
+func TestShowTableStatusPrepared(t *testing.T, harness Harness) {
+	dbs := CreateSubsetTestData(t, harness, infoSchemaTables)
+	engine := NewEngineWithDbs(t, harness, dbs)
+	defer engine.Close()
+
+	CreateIndexes(t, harness, engine)
+	createForeignKeys(t, harness, engine)
+
+	for _, tt := range ShowTableStatusQueries {
+		TestPreparedQuery(t, harness, engine, tt.Query, tt.Expected, nil, nil)
+	}
+}
+
 func TestAddDropPks(t *testing.T, harness Harness) {
 	require := require.New(t)
 
@@ -5705,6 +5957,197 @@ func TestPersist(t *testing.T, harness Harness, newPersistableSess func(ctx *sql
 	}
 }
 
+func TestPrepared(t *testing.T, harness Harness) {
+	qtests := []QueryTest{
+		{
+			Query: "SELECT i, 1 AS foo, 2 AS bar FROM (SELECT i FROM mYtABLE WHERE i = ?) AS a ORDER BY foo, i",
+			Expected: []sql.Row{
+				{2, 1, 2}},
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(2), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT i, 1 AS foo, 2 AS bar FROM (SELECT i FROM mYtABLE WHERE i = :var) AS a WHERE bar = :var ORDER BY foo, i",
+			Expected: []sql.Row{
+				{2, 1, 2}},
+			Bindings: map[string]sql.Expression{
+				"var": expression.NewLiteral(int64(2), sql.Int64),
+			},
+		},
+		{
+			Query:    "SELECT i, 1 AS foo, 2 AS bar FROM MyTable WHERE bar = ? ORDER BY foo, i;",
+			Expected: []sql.Row{},
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(1), sql.Int64),
+			},
+		},
+		{
+			Query:    "SELECT i, 1 AS foo, 2 AS bar FROM MyTable WHERE bar = :bar AND foo = :foo ORDER BY foo, i;",
+			Expected: []sql.Row{},
+			Bindings: map[string]sql.Expression{
+				"bar": expression.NewLiteral(int64(1), sql.Int64),
+				"foo": expression.NewLiteral(int64(1), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT :foo * 2",
+			Expected: []sql.Row{
+				{2},
+			},
+			Bindings: map[string]sql.Expression{
+				"foo": expression.NewLiteral(int64(1), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT i from mytable where i in (:foo, :bar) order by 1",
+			Expected: []sql.Row{
+				{1},
+				{2},
+			},
+			Bindings: map[string]sql.Expression{
+				"foo": expression.NewLiteral(int64(1), sql.Int64),
+				"bar": expression.NewLiteral(int64(2), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT i from mytable where i = :foo * 2",
+			Expected: []sql.Row{
+				{2},
+			},
+			Bindings: map[string]sql.Expression{
+				"foo": expression.NewLiteral(int64(1), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT i from mytable where 4 = :foo * 2 order by 1",
+			Expected: []sql.Row{
+				{1},
+				{2},
+				{3},
+			},
+			Bindings: map[string]sql.Expression{
+				"foo": expression.NewLiteral(int64(2), sql.Int64),
+			},
+		},
+		{
+			Query: "SELECT i FROM mytable WHERE s = 'first row' ORDER BY i DESC LIMIT ?;",
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(1, sql.Int8),
+			},
+			Expected: []sql.Row{{int64(1)}},
+		},
+		{
+			Query: "SELECT i FROM mytable ORDER BY i LIMIT ? OFFSET 2;",
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(1, sql.Int8),
+				"v2": expression.NewLiteral(1, sql.Int8),
+			},
+			Expected: []sql.Row{{int64(3)}},
+		},
+		// todo(max): sort function expressions w/ bindvars are aliased incorrectly
+		//{
+		//	Query: "SELECT sum(?) as x FROM mytable ORDER BY sum(?)",
+		//	Bindings: map[string]sql.Expression{
+		//		"v1": expression.NewLiteral(1, sql.Int8),
+		//		"v2": expression.NewLiteral(1, sql.Int8),
+		//	},
+		//	Expected: []sql.Row{{float64(3)}},
+		//},
+		{
+			Query: "SELECT (select sum(?) from mytable) as x FROM mytable ORDER BY (select sum(?) from mytable)",
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(1, sql.Int8),
+				"v2": expression.NewLiteral(1, sql.Int8),
+			},
+			Expected: []sql.Row{{float64(3)}, {float64(3)}, {float64(3)}},
+		},
+		{
+			Query: "With x as (select sum(?) from mytable) select sum(?) from x ORDER BY (select sum(?) from mytable)",
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(1, sql.Int8),
+				"v2": expression.NewLiteral(1, sql.Int8),
+				"v3": expression.NewLiteral(1, sql.Int8),
+			},
+			Expected: []sql.Row{{float64(1)}},
+		},
+		{
+			Query: "SELECT CAST(? as CHAR) UNION SELECT CAST(? as CHAR)",
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(1, sql.Int8),
+				"v2": expression.NewLiteral("1", sql.TinyText),
+			},
+			Expected: []sql.Row{{"1"}},
+		},
+	}
+
+	e := NewEngine(t, harness)
+
+	RunQuery(t, e, harness, "CREATE TABLE a (x int, y int, z int)")
+	RunQuery(t, e, harness, "INSERT INTO a VALUES (0,1,1), (1,1,1), (2,1,1), (3,2,2), (4,2,2)")
+	ctx := NewContext(harness)
+	for _, tt := range qtests {
+		t.Run(fmt.Sprintf("%s", tt.Query), func(t *testing.T) {
+			_, err := e.PrepareQuery(ctx, tt.Query)
+			require.NoError(t, err)
+			TestQueryWithContext(t, ctx, e, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+		})
+	}
+
+	repeatTests := []QueryTest{
+		{
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(2), sql.Int64),
+			},
+			Expected: []sql.Row{
+				{2, float64(4)},
+			},
+		},
+		{
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(2), sql.Int64),
+			},
+			Expected: []sql.Row{
+				{2, float64(4)},
+			},
+		},
+		{
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(0), sql.Int64),
+			},
+			Expected: []sql.Row{
+				{1, float64(2)},
+				{2, float64(4)},
+			},
+		},
+		{
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(3), sql.Int64),
+			},
+			Expected: []sql.Row{
+				{2, float64(2)},
+			},
+		},
+		{
+			Bindings: map[string]sql.Expression{
+				"v1": expression.NewLiteral(int64(1), sql.Int64),
+			},
+			Expected: []sql.Row{
+				{1, float64(1)},
+				{2, float64(4)},
+			},
+		},
+	}
+	repeatQ := "select y, sum(y) from a where x > ? group by y order by y"
+	_, err := e.PrepareQuery(ctx, repeatQ)
+	require.NoError(t, err)
+	for _, tt := range repeatTests {
+		t.Run(fmt.Sprintf("%s", tt.Query), func(t *testing.T) {
+			TestQueryWithContext(t, ctx, e, repeatQ, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+		})
+	}
+}
+
 var pid uint64
 
 func getEmptyPort(t *testing.T) int {
@@ -5815,7 +6258,15 @@ func NewEngineWithProvider(_ *testing.T, harness Harness, provider sql.MutableDa
 }
 
 // TestQuery runs a query on the engine given and asserts that results are as expected.
-func TestQuery(t *testing.T, harness Harness, e *sqle.Engine, q string, expected []sql.Row, expectedCols []*sql.Column, bindings map[string]sql.Expression) {
+func TestQuery(
+	t *testing.T,
+	harness Harness,
+	e *sqle.Engine,
+	q string,
+	expected []sql.Row,
+	expectedCols []*sql.Column,
+	bindings map[string]sql.Expression,
+) {
 	t.Run(q, func(t *testing.T) {
 		if sh, ok := harness.(SkippingHarness); ok {
 			if sh.SkipQueryTest(q) {
@@ -5828,7 +6279,122 @@ func TestQuery(t *testing.T, harness Harness, e *sqle.Engine, q string, expected
 	})
 }
 
-func TestQueryWithContext(t *testing.T, ctx *sql.Context, e *sqle.Engine, q string, expected []sql.Row, expectedCols []*sql.Column, bindings map[string]sql.Expression) {
+// TestPreparedQuery runs a prepared query on the engine given and asserts that results are as expected.
+func TestPreparedQuery(
+	t *testing.T,
+	harness Harness,
+	e *sqle.Engine,
+	q string,
+	expected []sql.Row,
+	expectedCols []*sql.Column,
+	bindings map[string]sql.Expression,
+) {
+	t.Run(q, func(t *testing.T) {
+		if sh, ok := harness.(SkippingHarness); ok {
+			if sh.SkipQueryTest(q) {
+				t.Skipf("Skipping query %s", q)
+			}
+		}
+		ctx := NewContextWithEngine(harness, e)
+		TestPreparedQueryWithContext(t, ctx, e, q, expected, expectedCols)
+	})
+}
+
+func runQueryPreparedWithCtx(
+	t *testing.T,
+	ctx *sql.Context,
+	e *sqle.Engine,
+	q string,
+) ([]sql.Row, sql.Schema, error) {
+	require := require.New(t)
+	parsed, err := parse.Parse(ctx, q)
+
+	if _, ok := parsed.(sql.Databaser); ok {
+		// DDL statements don't support prepared statements
+		sch, iter, err := e.QueryNodeWithBindings(ctx, q, nil, nil)
+		require.NoError(err, "Unexpected error for query %s", q)
+
+		rows, err := sql.RowIterToRows(ctx, sch, iter)
+		return rows, sch, err
+	}
+
+	bindVars := make(map[string]sql.Expression)
+	var bindCnt int
+	var foundBindVar bool
+	insertBindings := func(expr sql.Expression) (sql.Expression, error) {
+		switch e := expr.(type) {
+		case *expression.Literal:
+			varName := fmt.Sprintf("v%d", bindCnt)
+			bindVars[varName] = e
+			bindCnt++
+			return expression.NewBindVar(varName), nil
+		case *expression.BindVar:
+			if _, ok := bindVars[e.Name]; ok {
+				return expr, nil
+			}
+			foundBindVar = true
+			return expr, nil
+		default:
+			return expr, nil
+		}
+	}
+	bound, err := plan.TransformUpWithOpaque(parsed, func(node sql.Node) (sql.Node, error) {
+		switch n := node.(type) {
+		case *plan.InsertInto:
+			newSource, err := plan.TransformExpressionsUp(n.Source, insertBindings)
+			if err != nil {
+				return nil, err
+			}
+			return n.WithSource(newSource), nil
+		default:
+			return plan.TransformExpressionsUp(n, insertBindings)
+		}
+		return node, nil
+	})
+
+	if foundBindVar {
+		t.Skip()
+	}
+
+	prepared, err := e.Analyzer.PrepareQuery(ctx, bound, nil)
+	e.PreparedData[ctx.Session.ID()] = sqle.PreparedData{
+		Query: q,
+		Node:  prepared,
+	}
+
+	sch, iter, err := e.QueryNodeWithBindings(ctx, q, nil, bindVars)
+	require.NoError(err, "Unexpected error for query %s", q)
+
+	rows, err := sql.RowIterToRows(ctx, sch, iter)
+	return rows, sch, err
+}
+
+func TestPreparedQueryWithContext(
+	t *testing.T,
+	ctx *sql.Context,
+	e *sqle.Engine,
+	q string,
+	expected []sql.Row,
+	expectedCols []*sql.Column,
+) {
+	require := require.New(t)
+	rows, sch, err := runQueryPreparedWithCtx(t, ctx, e, q)
+	require.NoError(err, "Unexpected error for query %s", q)
+
+	checkResults(t, require, expected, expectedCols, sch, rows, q)
+
+	require.Equal(0, ctx.Memory.NumCaches())
+}
+
+func TestQueryWithContext(
+	t *testing.T,
+	ctx *sql.Context,
+	e *sqle.Engine,
+	q string,
+	expected []sql.Row,
+	expectedCols []*sql.Column,
+	bindings map[string]sql.Expression,
+) {
 	require := require.New(t)
 	sch, iter, err := e.QueryWithBindings(ctx, q, bindings)
 	require.NoError(err, "Unexpected error for query %s", q)
@@ -5841,7 +6407,15 @@ func TestQueryWithContext(t *testing.T, ctx *sql.Context, e *sqle.Engine, q stri
 	require.Equal(0, ctx.Memory.NumCaches())
 }
 
-func checkResults(t *testing.T, require *require.Assertions, expected []sql.Row, expectedCols []*sql.Column, sch sql.Schema, rows []sql.Row, q string) {
+func checkResults(
+	t *testing.T,
+	require *require.Assertions,
+	expected []sql.Row,
+	expectedCols []*sql.Column,
+	sch sql.Schema,
+	rows []sql.Row,
+	q string,
+) {
 	widenedRows := WidenRows(sch, rows)
 	widenedExpected := WidenRows(sch, expected)
 

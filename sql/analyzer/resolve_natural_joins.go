@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveNaturalJoins(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveNaturalJoins(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("resolve_natural_joins")
 	defer span.Finish()
 

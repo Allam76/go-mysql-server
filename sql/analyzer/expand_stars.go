@@ -23,7 +23,7 @@ import (
 )
 
 // expandStars replaces star expressions into lists of concrete column expressions
-func expandStars(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func expandStars(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("expand_stars")
 	defer span.Finish()
 

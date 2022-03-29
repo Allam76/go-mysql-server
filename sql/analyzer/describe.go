@@ -20,7 +20,7 @@ import (
 )
 
 // resolveDescribeQuery resolves any DescribeQuery nodes by analyzing their child and assigning it back.
-func resolveDescribeQuery(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveDescribeQuery(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	d, ok := n.(*plan.DescribeQuery)
 	if !ok {
 		return n, nil

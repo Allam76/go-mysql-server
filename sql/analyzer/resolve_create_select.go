@@ -5,7 +5,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveCreateSelect(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveCreateSelect(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	ct, ok := n.(*plan.CreateTable)
 	if !ok || ct.Select() == nil {
 		return n, nil

@@ -29,7 +29,7 @@ import (
 // validateCreateTrigger handles CreateTrigger nodes, resolving references to "old" and "new" table references in
 // the trigger body. Also validates that these old and new references are being used appropriately -- they are only
 // valid for certain kinds of triggers and certain statements.
-func validateCreateTrigger(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope) (sql.Node, error) {
+func validateCreateTrigger(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	ct, ok := node.(*plan.CreateTrigger)
 	if !ok {
 		return node, nil
@@ -116,7 +116,7 @@ func validateCreateTrigger(ctx *sql.Context, a *Analyzer, node sql.Node, scope *
 	return ct.WithChildren(ct.Table, StripPassthroughNodes(triggerLogic))
 }
 
-func applyTriggers(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyTriggers(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	// Skip this step for CreateTrigger statements
 	if _, ok := n.(*plan.CreateTrigger); ok {
 		return n, nil

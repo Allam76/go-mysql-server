@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("resolve_subqueries")
 	defer span.Finish()
 
@@ -28,7 +28,7 @@ func resolveSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) 
 		switch n := n.(type) {
 		case *plan.SubqueryAlias:
 			// subqueries do not have access to outer scope
-			child, err := a.analyzeThroughBatch(ctx, n.Child, nil, "default-rules")
+			child, err := a.analyzeThroughBatch(ctx, n.Child, nil, "default-rules", sel)
 			if err != nil {
 				return nil, err
 			}
@@ -47,7 +47,7 @@ func resolveSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) 
 	})
 }
 
-func finalizeSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func finalizeSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("finalize_subqueries")
 	defer span.Finish()
 
@@ -55,7 +55,7 @@ func finalizeSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope)
 		switch n := n.(type) {
 		case *plan.SubqueryAlias:
 			// subqueries do not have access to outer scope
-			child, err := a.analyzeStartingAtBatch(ctx, n.Child, nil, "default-rules")
+			child, err := a.analyzeStartingAtBatch(ctx, n.Child, nil, "default-rules", sel)
 			if err != nil {
 				return nil, err
 			}
@@ -74,7 +74,7 @@ func finalizeSubqueries(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope)
 	})
 }
 
-func flattenTableAliases(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func flattenTableAliases(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("flatten_table_aliases")
 	defer span.Finish()
 	return plan.TransformUp(n, func(n sql.Node) (sql.Node, error) {
@@ -93,7 +93,7 @@ func flattenTableAliases(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope
 	})
 }
 
-func resolveSubqueryExpressions(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveSubqueryExpressions(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	return plan.TransformExpressionsUpWithNode(n, func(n sql.Node, e sql.Expression) (sql.Expression, error) {
 		s, ok := e.(*plan.Subquery)
 		// We always analyze subquery expressions even if they are resolved, since other transformations to the surrounding
@@ -204,7 +204,7 @@ func isDeterminstic(n sql.Node) bool {
 // cacheSubqueryResults determines whether it's safe to cache the results for any subquery expressions, and marks the
 // subquery as cacheable if so. Caching subquery results is safe in the case that no outer scope columns are referenced,
 // if all expressions in the subquery are deterministic, and if the subquery isn't inside a trigger block.
-func cacheSubqueryResults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func cacheSubqueryResults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	// No need to inspect for trigger blocks as the Analyzer is recursively invoked on trigger blocks.
 	if n, ok := n.(*plan.TriggerBeginEndBlock); ok {
 		return n, nil
@@ -229,7 +229,7 @@ func cacheSubqueryResults(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scop
 // cacheSubqueryAlisesInJoins will look for joins against subquery aliases that
 // will repeatedly execute the subquery, and will insert a *plan.CachedResults
 // node on top of those nodes.
-func cacheSubqueryAlisesInJoins(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func cacheSubqueryAlisesInJoins(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	n, err := plan.TransformUpCtx(n, nil, func(c plan.TransformContext) (sql.Node, error) {
 		_, isJoin := c.Parent.(plan.JoinNode)
 		_, isIndexedJoin := c.Parent.(*plan.IndexedJoin)
@@ -277,7 +277,7 @@ func cacheSubqueryAlisesInJoins(ctx *sql.Context, a *Analyzer, n sql.Node, scope
 	return n, err
 }
 
-func setJoinScopeLen(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func setJoinScopeLen(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	scopeLen := len(scope.Schema())
 	if scopeLen == 0 {
 		return n, nil

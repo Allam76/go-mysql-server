@@ -28,7 +28,7 @@ var (
 	errExplodeNotArray    = errors.NewKind("argument of type %q given to EXPLODE, expecting array")
 )
 
-func resolveGenerators(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveGenerators(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	return plan.TransformUp(n, func(n sql.Node) (sql.Node, error) {
 		p, ok := n.(*plan.Project)
 		if !ok {

@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
-func resolveCreateLike(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveCreateLike(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	ct, ok := n.(*plan.CreateTable)
 	if !ok || ct.Like() == nil {
 		return n, nil

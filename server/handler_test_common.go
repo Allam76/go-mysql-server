@@ -37,6 +37,7 @@ func setupMemDB(require *require.Assertions) *sqle.Engine {
 	e := sqle.NewDefault(pro)
 
 	tableTest := memory.NewTable("test", sql.NewPrimaryKeySchema(sql.Schema{{Name: "c1", Type: sql.Int32, Source: "test"}}))
+	tableTest.EnablePrimaryKeyIndexes()
 
 	for i := 0; i < 1010; i++ {
 		require.NoError(tableTest.Insert(

@@ -26,7 +26,7 @@ import (
 )
 
 // constructJoinPlan finds an optimal table ordering and access plan for the tables in the query.
-func constructJoinPlan(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func constructJoinPlan(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("construct_join_plan")
 	defer span.Finish()
 

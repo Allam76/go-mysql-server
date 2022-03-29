@@ -23,7 +23,7 @@ import (
 
 // applyUpdateAccumulators wraps any Insert, Update, or Delete nodes with RowUpdateAccumulators to tally the results
 // for report to the client.
-func applyUpdateAccumulators(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func applyUpdateAccumulators(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	// Scope will be non-null in the case of trigger execution analysis. We don't want to apply update accumulators in
 	// that case.
 	// TODO: probably better to just remove this rule from the analyzer in that specific case

@@ -26,7 +26,7 @@ import (
 // pushdownFilters attempts to push conditions in filters down to individual tables. Tables that implement
 // sql.FilteredTable will get such conditions applied to them. For conditions that have an index, tables that implement
 // sql.IndexAddressableTable will get an appropriate index lookup applied.
-func pushdownFilters(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func pushdownFilters(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("pushdown_filters")
 	defer span.Finish()
 
@@ -58,7 +58,7 @@ func pushdownFiltersAtNode(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Sco
 
 // pushdownSubqueryAliasFilters attempts to push conditions in filters down to
 // individual subquery aliases.
-func pushdownSubqueryAliasFilters(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func pushdownSubqueryAliasFilters(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("pushdown_subquery_alias_filters")
 	defer span.Finish()
 
@@ -75,7 +75,7 @@ func pushdownSubqueryAliasFilters(ctx *sql.Context, a *Analyzer, n sql.Node, sco
 }
 
 // pushdownProjections attempts to push projections down to individual tables that implement sql.ProjectTable
-func pushdownProjections(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func pushdownProjections(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, ctx := ctx.Span("pushdown_projections")
 	defer span.Finish()
 
@@ -471,8 +471,13 @@ func pushdownFiltersToTable(
 
 	var newTableNode sql.Node = tableNode
 
+	ft, ok := table.(sql.FilteredTable)
+	if !ok {
+		return tableNode, nil
+	}
+
 	// Push any filters for this table onto the table itself if it's a sql.FilteredTable
-	if ft, ok := table.(sql.FilteredTable); ok && len(filters.availableFiltersForTable(ctx, tableNode.Name())) > 0 {
+	if len(filters.availableFiltersForTable(ctx, tableNode.Name())) > 0 {
 		tableFilters := filters.availableFiltersForTable(ctx, tableNode.Name())
 		handled := ft.HandledFilters(normalizeExpressions(ctx, tableAliases, tableFilters...))
 		filters.markFiltersHandled(handled...)
@@ -642,7 +647,7 @@ func pushdownProjectionsToTable(
 	if pt, ok := table.(sql.ProjectedTable); ok && len(fieldsByTable[tableNode.Name()]) > 0 {
 		if usedProjections[tableNode.Name()] == nil {
 			projectedFields := fieldsByTable[tableNode.Name()]
-			table = pt.WithProjection(projectedFields)
+			table = pt.WithProjections(projectedFields)
 			usedProjections[tableNode.Name()] = projectedFields
 		}
 
@@ -746,4 +751,18 @@ func (es exprSlice) String() string {
 		sb.WriteString(e.String())
 	}
 	return sb.String()
+}
+
+// stripDecorations removes *plan.DecoratedNode that wrap plan.ResolvedTable instances.
+// Without this step, some prepared statement reanalysis rules fail to identify
+// filter-table relationships.
+func stripDecorations(ctx *sql.Context, a *Analyzer, node sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
+	return plan.TransformUp(node, func(node sql.Node) (sql.Node, error) {
+		switch n := node.(type) {
+		case *plan.DecoratedNode:
+			return n.Child, nil
+		default:
+			return node, nil
+		}
+	})
 }

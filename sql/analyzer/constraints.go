@@ -23,7 +23,7 @@ import (
 
 // resolveDropConstraint replaces DropConstraint nodes with a concrete type of alter table node as appropriate, or
 // throws a constraint not found error if the named constraint isn't found on the table given.
-func resolveDropConstraint(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func resolveDropConstraint(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	dropConstraint, ok := n.(*plan.DropConstraint)
 	if !ok {
 		return n, nil
@@ -67,7 +67,7 @@ func resolveDropConstraint(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Sco
 }
 
 // validateDropConstraint returns an error if the constraint named to be dropped doesn't exist
-func validateDropConstraint(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func validateDropConstraint(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	switch n := n.(type) {
 	case *plan.DropForeignKey:
 		rt, ok := n.Child.(*plan.ResolvedTable)

@@ -29,7 +29,7 @@ type RoutineTable interface {
 }
 
 // assignRoutines sets the map of db-procedures in the routineTable node.
-func assignRoutines(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope) (sql.Node, error) {
+func assignRoutines(ctx *sql.Context, a *Analyzer, n sql.Node, scope *Scope, sel RuleSelector) (sql.Node, error) {
 	span, _ := ctx.Span("assign_routines")
 	defer span.Finish()
 
