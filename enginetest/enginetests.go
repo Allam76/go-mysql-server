@@ -148,6 +148,7 @@ func CreateIndexes(t *testing.T, harness Harness, engine *sqle.Engine) {
 func createForeignKeys(t *testing.T, harness Harness, engine *sqle.Engine) {
 	if fkh, ok := harness.(ForeignKeyHarness); ok && fkh.SupportsForeignKeys() {
 		ctx := NewContextWithEngine(harness, engine)
+		TestQueryWithContext(t, ctx, engine, "ALTER TABLE mytable ADD INDEX idx_si (s,i)", nil, nil, nil)
 		TestQueryWithContext(t, ctx, engine, "ALTER TABLE fk_tbl ADD CONSTRAINT fk1 FOREIGN KEY (a,b) REFERENCES mytable (i,s) ON DELETE CASCADE", nil, nil, nil)
 	}
 }
@@ -771,12 +772,11 @@ func TestSpatialDelete(t *testing.T, harness Harness) {
 }
 
 func TestTruncate(t *testing.T, harness Harness) {
-	e := NewEngine(t, harness)
-	defer e.Close()
-
 	ctx := NewContext(harness)
 
 	t.Run("Standard TRUNCATE", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1))")
 		RunQuery(t, e, harness, "INSERT INTO t1 VALUES (1,1), (2,2), (3,3)")
 		TestQuery(t, harness, e, "SELECT * FROM t1 ORDER BY 1", []sql.Row{{int64(1), int64(1)}, {int64(2), int64(2)}, {int64(3), int64(3)}}, nil, nil)
@@ -790,6 +790,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("Foreign Key References", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t2parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1))")
 		RunQuery(t, e, harness, "CREATE TABLE t2child (pk BIGINT PRIMARY KEY, v1 BIGINT, "+
 			"FOREIGN KEY (v1) REFERENCES t2parent (v1))")
@@ -798,6 +800,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("ON DELETE Triggers", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t3 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "CREATE TABLE t3i (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "CREATE TRIGGER trig_t3 BEFORE DELETE ON t3 FOR EACH ROW INSERT INTO t3i VALUES (old.pk, old.v1)")
@@ -809,6 +813,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("auto_increment column", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t4 (pk BIGINT AUTO_INCREMENT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t4(v1) VALUES (5), (6)")
 		TestQuery(t, harness, e, "SELECT * FROM t4 ORDER BY 1", []sql.Row{{int64(1), int64(5)}, {int64(2), int64(6)}}, nil, nil)
@@ -819,6 +825,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("Naked DELETE", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t5 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t5 VALUES (1,1), (2,2)")
 		TestQuery(t, harness, e, "SELECT * FROM t5 ORDER BY 1", []sql.Row{{int64(1), int64(1)}, {int64(2), int64(2)}}, nil, nil)
@@ -847,6 +855,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("Naked DELETE with Foreign Key References", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t6parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1))")
 		RunQuery(t, e, harness, "CREATE TABLE t6child (pk BIGINT PRIMARY KEY, v1 BIGINT, "+
 			"FOREIGN KEY (v1) REFERENCES t6parent (v1))")
@@ -872,6 +882,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("Naked DELETE with ON DELETE Triggers", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t7 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "CREATE TABLE t7i (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "CREATE TRIGGER trig_t7 BEFORE DELETE ON t7 FOR EACH ROW INSERT INTO t7i VALUES (old.pk, old.v1)")
@@ -904,6 +916,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("Naked DELETE with auto_increment column", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t8 (pk BIGINT AUTO_INCREMENT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t8(v1) VALUES (4), (5)")
 		TestQuery(t, harness, e, "SELECT * FROM t8 ORDER BY 1", []sql.Row{{int64(1), int64(4)}, {int64(2), int64(5)}}, nil, nil)
@@ -933,6 +947,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("DELETE with WHERE clause", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t9 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t9 VALUES (7,7), (8,8)")
 		TestQuery(t, harness, e, "SELECT * FROM t9 ORDER BY 1", []sql.Row{{int64(7), int64(7)}, {int64(8), int64(8)}}, nil, nil)
@@ -960,6 +976,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("DELETE with LIMIT clause", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t10 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t10 VALUES (8,8), (9,9)")
 		TestQuery(t, harness, e, "SELECT * FROM t10 ORDER BY 1", []sql.Row{{int64(8), int64(8)}, {int64(9), int64(9)}}, nil, nil)
@@ -987,6 +1005,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 	})
 
 	t.Run("DELETE with ORDER BY clause", func(t *testing.T) {
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t11 (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t11 VALUES (1,1), (9,9)")
 		TestQuery(t, harness, e, "SELECT * FROM t11 ORDER BY 1", []sql.Row{{int64(1), int64(1)}, {int64(9), int64(9)}}, nil, nil)
@@ -1015,7 +1035,8 @@ func TestTruncate(t *testing.T, harness Harness) {
 
 	t.Run("Multi-table DELETE", func(t *testing.T) {
 		t.Skip("Multi-table DELETE currently broken")
-
+		e := NewEngine(t, harness)
+		defer e.Close()
 		RunQuery(t, e, harness, "CREATE TABLE t12a (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "CREATE TABLE t12b (pk BIGINT PRIMARY KEY, v1 BIGINT)")
 		RunQuery(t, e, harness, "INSERT INTO t12a VALUES (1,1), (2,2)")
@@ -3226,25 +3247,33 @@ func TestCreateForeignKeys(t *testing.T, harness Harness) {
 	fkt, ok := child.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err := fkt.GetForeignKeys(NewContext(harness))
+	fks, err := fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
 
 	expected := []sql.ForeignKeyConstraint{
 		{
-			Name:              "fk1",
-			Columns:           []string{"d"},
-			ReferencedTable:   "parent",
-			ReferencedColumns: []string{"b"},
-			OnUpdate:          sql.ForeignKeyReferenceOption_DefaultAction,
-			OnDelete:          sql.ForeignKeyReferenceOption_Cascade,
+			Name:           "fk1",
+			Database:       "mydb",
+			Table:          "child",
+			Columns:        []string{"d"},
+			ParentDatabase: "mydb",
+			ParentTable:    "parent",
+			ParentColumns:  []string{"b"},
+			OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
+			OnDelete:       sql.ForeignKeyReferentialAction_Cascade,
+			IsResolved:     true,
 		},
 		{
-			Name:              "fk4",
-			Columns:           []string{"d"},
-			ReferencedTable:   "child",
-			ReferencedColumns: []string{"c"},
-			OnUpdate:          sql.ForeignKeyReferenceOption_DefaultAction,
-			OnDelete:          sql.ForeignKeyReferenceOption_DefaultAction,
+			Name:           "fk4",
+			Database:       "mydb",
+			Table:          "child",
+			Columns:        []string{"d"},
+			ParentDatabase: "mydb",
+			ParentTable:    "child",
+			ParentColumns:  []string{"c"},
+			OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
+			OnDelete:       sql.ForeignKeyReferentialAction_DefaultAction,
+			IsResolved:     true,
 		},
 	}
 	assert.Equal(t, expected, fks)
@@ -3260,25 +3289,33 @@ func TestCreateForeignKeys(t *testing.T, harness Harness) {
 	fkt, ok = child.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err = fkt.GetForeignKeys(NewContext(harness))
+	fks, err = fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
 
 	expected = []sql.ForeignKeyConstraint{
 		{
-			Name:              "fk2",
-			Columns:           []string{"f"},
-			ReferencedTable:   "parent",
-			ReferencedColumns: []string{"b"},
-			OnUpdate:          sql.ForeignKeyReferenceOption_DefaultAction,
-			OnDelete:          sql.ForeignKeyReferenceOption_Restrict,
+			Name:           "fk2",
+			Database:       "mydb",
+			Table:          "child2",
+			Columns:        []string{"f"},
+			ParentDatabase: "mydb",
+			ParentTable:    "parent",
+			ParentColumns:  []string{"b"},
+			OnUpdate:       sql.ForeignKeyReferentialAction_DefaultAction,
+			OnDelete:       sql.ForeignKeyReferentialAction_Restrict,
+			IsResolved:     true,
 		},
 		{
-			Name:              "fk3",
-			Columns:           []string{"f"},
-			ReferencedTable:   "child",
-			ReferencedColumns: []string{"d"},
-			OnUpdate:          sql.ForeignKeyReferenceOption_SetNull,
-			OnDelete:          sql.ForeignKeyReferenceOption_DefaultAction,
+			Name:           "fk3",
+			Database:       "mydb",
+			Table:          "child2",
+			Columns:        []string{"f"},
+			ParentDatabase: "mydb",
+			ParentTable:    "child",
+			ParentColumns:  []string{"d"},
+			OnUpdate:       sql.ForeignKeyReferentialAction_SetNull,
+			OnDelete:       sql.ForeignKeyReferentialAction_DefaultAction,
+			IsResolved:     true,
 		},
 	}
 	assert.Equal(t, expected, fks)
@@ -3295,7 +3332,7 @@ func TestCreateForeignKeys(t *testing.T, harness Harness) {
 	require.Error(err)
 	assert.True(t, sql.ErrTableNotFound.Is(err))
 
-	_, _, err = e.Query(NewContext(harness), "ALTER TABLE child2 ADD CONSTRAINT fk4 FOREIGN KEY (f) REFERENCES child(dne) ON UPDATE SET NULL")
+	_, _, err = e.Query(NewContext(harness), "ALTER TABLE child2 ADD CONSTRAINT fk5 FOREIGN KEY (f) REFERENCES child(dne) ON UPDATE SET NULL")
 	require.Error(err)
 	assert.True(t, sql.ErrTableColumnNotFound.Is(err))
 
@@ -3351,17 +3388,21 @@ func TestDropForeignKeys(t *testing.T, harness Harness) {
 	fkt, ok := child.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err := fkt.GetForeignKeys(NewContext(harness))
+	fks, err := fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
 
 	expected := []sql.ForeignKeyConstraint{
 		{
-			Name:              "fk3",
-			Columns:           []string{"f"},
-			ReferencedTable:   "child",
-			ReferencedColumns: []string{"d"},
-			OnUpdate:          sql.ForeignKeyReferenceOption_SetNull,
-			OnDelete:          sql.ForeignKeyReferenceOption_DefaultAction,
+			Name:           "fk3",
+			Database:       "mydb",
+			Table:          "child2",
+			Columns:        []string{"f"},
+			ParentDatabase: "mydb",
+			ParentTable:    "child",
+			ParentColumns:  []string{"d"},
+			OnUpdate:       sql.ForeignKeyReferentialAction_SetNull,
+			OnDelete:       sql.ForeignKeyReferentialAction_DefaultAction,
+			IsResolved:     true,
 		},
 	}
 	assert.Equal(t, expected, fks)
@@ -3375,16 +3416,30 @@ func TestDropForeignKeys(t *testing.T, harness Harness) {
 	fkt, ok = child.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err = fkt.GetForeignKeys(NewContext(harness))
+	fks, err = fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
-
-	expected = []sql.ForeignKeyConstraint{}
-	assert.Equal(t, expected, fks)
+	assert.Len(t, fks, 0)
 
 	// Some error queries
 	AssertErr(t, e, harness, "ALTER TABLE child3 DROP CONSTRAINT dne", sql.ErrTableNotFound)
 	AssertErr(t, e, harness, "ALTER TABLE child2 DROP CONSTRAINT fk3", sql.ErrUnknownConstraint)
-	AssertErr(t, e, harness, "ALTER TABLE child2 DROP FOREIGN KEY fk3", sql.ErrUnknownConstraint)
+	AssertErr(t, e, harness, "ALTER TABLE child2 DROP FOREIGN KEY fk3", sql.ErrForeignKeyNotFound)
+}
+
+func TestForeignKeys(t *testing.T, harness Harness) {
+	for _, script := range ForeignKeyTests {
+		t.Run(script.Name, func(t *testing.T) {
+			myDb := harness.NewDatabase("mydb")
+			databases := []sql.Database{myDb}
+			e := NewEngineWithDbs(t, harness, databases)
+			defer e.Close()
+			script.SetUpScript = append([]string{
+				"CREATE TABLE parent (id INT PRIMARY KEY, v1 INT, v2 INT, INDEX v1 (v1), INDEX v2 (v2));",
+				"CREATE TABLE child (id INT PRIMARY KEY, v1 INT, v2 INT);",
+			}, script.SetUpScript...)
+			TestScriptWithEngine(t, e, harness, script)
+		})
+	}
 }
 
 func TestCreateCheckConstraints(t *testing.T, harness Harness) {
@@ -3711,7 +3766,7 @@ func TestDropConstraints(t *testing.T, harness Harness) {
 	defer e.Close()
 
 	RunQuery(t, e, harness, "CREATE TABLE t1 (a INTEGER PRIMARY KEY, b INTEGER, c integer)")
-	RunQuery(t, e, harness, "CREATE TABLE t2 (a INTEGER PRIMARY KEY, b INTEGER, c integer)")
+	RunQuery(t, e, harness, "CREATE TABLE t2 (a INTEGER PRIMARY KEY, b INTEGER, c integer, INDEX (b))")
 	RunQuery(t, e, harness, "ALTER TABLE t1 ADD CONSTRAINT chk1 CHECK (a > 0)")
 	RunQuery(t, e, harness, "ALTER TABLE t1 ADD CONSTRAINT fk1 FOREIGN KEY (a) REFERENCES t2(b)")
 
@@ -3741,17 +3796,21 @@ func TestDropConstraints(t *testing.T, harness Harness) {
 	fkt, ok := table.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err := fkt.GetForeignKeys(NewContext(harness))
+	fks, err := fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
 
 	expectedFks := []sql.ForeignKeyConstraint{
 		{
-			Name:              "fk1",
-			Columns:           []string{"a"},
-			ReferencedTable:   "t2",
-			ReferencedColumns: []string{"b"},
-			OnUpdate:          "DEFAULT",
-			OnDelete:          "DEFAULT",
+			Name:           "fk1",
+			Database:       "mydb",
+			Table:          "t1",
+			Columns:        []string{"a"},
+			ParentDatabase: "mydb",
+			ParentTable:    "t2",
+			ParentColumns:  []string{"b"},
+			OnUpdate:       "DEFAULT",
+			OnDelete:       "DEFAULT",
+			IsResolved:     true,
 		},
 	}
 	assert.Equal(t, expectedFks, fks)
@@ -3774,17 +3833,21 @@ func TestDropConstraints(t *testing.T, harness Harness) {
 	fkt, ok = table.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err = fkt.GetForeignKeys(NewContext(harness))
+	fks, err = fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
 
 	expectedFks = []sql.ForeignKeyConstraint{
 		{
-			Name:              "fk1",
-			Columns:           []string{"a"},
-			ReferencedTable:   "t2",
-			ReferencedColumns: []string{"b"},
-			OnUpdate:          "DEFAULT",
-			OnDelete:          "DEFAULT",
+			Name:           "fk1",
+			Database:       "mydb",
+			Table:          "t1",
+			Columns:        []string{"a"},
+			ParentDatabase: "mydb",
+			ParentTable:    "t2",
+			ParentColumns:  []string{"b"},
+			OnUpdate:       "DEFAULT",
+			OnDelete:       "DEFAULT",
+			IsResolved:     true,
 		},
 	}
 	assert.Equal(t, expectedFks, fks)
@@ -3800,18 +3863,14 @@ func TestDropConstraints(t *testing.T, harness Harness) {
 
 	checks, err = cht.GetChecks(NewContext(harness))
 	require.NoError(err)
-
-	expected = []sql.CheckDefinition{}
-	assert.Equal(t, expected, checks)
+	assert.Len(t, checks, 0)
 
 	fkt, ok = table.(sql.ForeignKeyTable)
 	require.True(ok)
 
-	fks, err = fkt.GetForeignKeys(NewContext(harness))
+	fks, err = fkt.GetDeclaredForeignKeys(NewContext(harness))
 	require.NoError(err)
-
-	expectedFks = []sql.ForeignKeyConstraint{}
-	assert.Equal(t, expectedFks, fks)
+	assert.Len(t, fks, 0)
 
 	// Some error statements
 	AssertErr(t, e, harness, "ALTER TABLE t3 DROP CONSTRAINT fk1", sql.ErrTableNotFound)
